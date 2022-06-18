@@ -1,0 +1,70 @@
+@charset "ISO-8859-1";
+
+html {
+  height: 100%;
+	overflow: hidden;
+}
+
+body{
+  display: flex;
+  flex: 1;
+  height: 100%;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+      -ms-user-select: none;
+          user-select: none;
+	overflow: hidden;
+}
+
+.container{
+  display: flex;
+  flex-wrap: wrap;
+  overflow:hidden;
+       width: 100%;
+       height: 100%;
+     margin: 0 auto;
+
+}
+.container > div{
+  transform-origin: top left;
+  max-width: 100vw;
+  max-height: 100vh;
+}
+#tcontainer {
+	margin: 0 auto;
+}
+
+.display-container {
+  display: flex;
+  flex-direction: row;
+}
+
+
+
+.beautiful{
+  justify-content: center;
+}
+ .beautiful > div  {
+  flex-grow: 1;
+  font-family: 'Venderna', sans-serif;
+  font-size: calc(var(--name-height) * var(--name-height-mult));
+  background-color: #fff;
+  border-radius: calc(var(--name-height) * .12);
+  height: calc(var(--name-height) * var(--name-height-mult));
+  margin: calc(.02 * var(--name-height) + .1vw);
+  transform-origin: 50% 0;
+
+  display: flex;
+  align-items:center;
+  justify-content: center;
+  color: #AAA;
+  text-align: center;
+}
+.beautiful:blank::before{
+  content: "Reload the page";
+  color: #FFF;
+}
+
+svg.text {
+  display: inline-block;
+}
