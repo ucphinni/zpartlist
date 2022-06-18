@@ -5,8 +5,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC",
+  "homepage": "https://github.com/ucphinni/zpartlist",
+  "author": "Cote Phinnizee <ucphinni@gmail.com>",
+  "bugs":"https://github.com/ucphinni/zpartlist/issues",
+  "license": "MIT",
   "dependencies": {
     "express": "^4.18.1",
     "fontmetrics": "^1.0.0",
@@ -14,6 +16,18 @@
     "playwright": "^1.22.1",
     "promise": "^8.1.0",
     "socket.io": "^4.5.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ucphinni/zpartlist.git"
+  },
+  "keywords": [
+  	"zoom",
+  	"display-list"
+  ],
+  "engines": {
+    "node": ">= 18.0.0",
+    "npm": ">= 8.0.0"
   },
   "description": ""
 }
