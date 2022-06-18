@@ -1,0 +1,12 @@
+{
+	"test_names": 
+		["James Happy",
+			"John Subtle",
+			"Always Loves Everyone",
+			"Tom Good Habits", "Susan Pillar", "Sam Upbduilding"
+		],
+	"test":true,
+	"zoom_scrape": false,
+	"port": 3000,
+	"zoom_wc_link": "https://us02web.zoom.us/wc/4684864354/join?pwd=RHNUNmp3eVhnaDdnZ1BJcVR2d0Rldz09"
+}
