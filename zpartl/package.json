@@ -1,9 +1,10 @@
 {
   "name": "zpartlist",
-  "version": "0.0.4",
+  "version": "0.0.6",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "bin":"zpartlist.js",
   "homepage": "https://github.com/ucphinni/zpartlist",
   "author": "Cote Phinnizee <ucphinni@gmail.com>",
   "bugs":"https://github.com/ucphinni/zpartlist/issues",
