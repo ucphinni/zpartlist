@@ -7,7 +7,6 @@ if (argv.length != 3) {
 	console.log("zpartlist (init|<dir>|<config file>)");
 	process.exit(1);
 }
-console.warn("got 3 args");
 var arg = argv[2];
 if (arg=='init')  {
 	const fs = require('fs');
@@ -44,9 +43,11 @@ else  if (!fs.existsSync(arg) ){
 }
 console.log(arg);
 const { chromium } = require('playwright');
-const express = require('express')
-const app = express()
-const cfg = require(arg);
+const express = require('express');
+const app = express();
+const rawdata = fs.readFileSync(arg);
+const cfg = JSON.parse(rawdata);
+
 const server = require('http').createServer(app)
 const port = process.env.PORT || cfg['port'];
 const io = require('socket.io')(server)
