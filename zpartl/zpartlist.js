@@ -1,11 +1,47 @@
+
+const { argv } = require('node:process');
+const fs = require('fs');
+const path = require('path');
+if (argv.length != 3) {
+	console.log("zpartlist (init|<dir>|<config file>)");
+	process.exit(1);
+}
+var arg = argv[2];
+if (arg=='init')  {
+	const fs = require('fs');
+	const content = `{
+	"test_names": 
+	[
+		"James Happy",
+		"John Subtle",
+		"Always Loves Everyone",
+		"Tom Good Habits", 
+		"Susan Pillar", 
+		"Sam Upbduilding"
+	],
+	"test":true,
+	"zoom_scrape": false,
+	"port": 3000,
+	"zoom_wc_link": "https://us02web.zoom.us/wc/<meetingid>/join?pwd=<pwd>"
+}`;
+	try {
+		fs.writeFileSync('config.json', content);
+	} catch (err) {	
+		console.error(err);
+		process.exit(1);
+	}
+	process.exit(0);
+}	
+if (fs.existsSync(arg) && fs.lstatSync(arg).isDirectory()) {
+	arg = path.join(arg,"config.json");
+}
 const { chromium } = require('playwright');
 const express = require('express')
 const app = express()
-const cfg = require('./config.json');
+const cfg = require(arg);
 const server = require('http').createServer(app)
 const port = process.env.PORT || cfg['port'];
 const io = require('socket.io')(server)
-const path = require('path');
 app.use(express.static(path.join(__dirname + '/public')));
 app.use('/scripts',express.static(__dirname + '/node_modules/fontmetrics/output'));
 let names;
