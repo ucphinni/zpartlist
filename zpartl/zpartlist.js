@@ -6,6 +6,7 @@ if (argv.length != 3) {
 	console.log("zpartlist (init|<dir>|<config file>)");
 	process.exit(1);
 }
+console.warn("got 3 args");
 var arg = argv[2];
 if (arg=='init')  {
 	const fs = require('fs');
