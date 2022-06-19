@@ -15,10 +15,10 @@ if (arg=='init')  {
 	[
 		"James Happy",
 		"John Subtle",
-		"Always Loves Everyone",
+		"Always Nice To Everyone",
 		"Tom Good Habits", 
 		"Susan Pillar", 
-		"Sam Upbduilding"
+		"Sam Upbuilding"
 	],
 	"test":true,
 	"zoom_scrape": false,
@@ -54,6 +54,18 @@ const io = require('socket.io')(server)
 app.use(express.static(path.join(__dirname + '/public')));
 app.use('/scripts',express.static(__dirname + '/node_modules/fontmetrics/output'));
 let names;
+const rx = /^(https?\:\/\/.*?\/)j(\/.*?)\?(.*)$/;
+var rxa = rx.exec(cfg['zoom_wc_link']);
+var res = '';
+if (rxa.length) {
+	res += rxa[1];
+	res += 'wc';
+	res += rxa[2];
+	res += '/join?';
+	res += rxa[3];
+	console.warn(res);
+	cfg['zoom_wc_link'] = res;
+}
 const ZOOMCONNECTURL=cfg['zoom_wc_link'];
 const ZOOMSCRAPE = cfg['zoom_scrape'];
 const TEST=cfg['test'];
