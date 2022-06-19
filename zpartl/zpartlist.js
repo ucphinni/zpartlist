@@ -55,6 +55,7 @@ app.use(express.static(path.join(__dirname + '/public')));
 app.use('/scripts',express.static(__dirname + '/node_modules/fontmetrics/output'));
 let names;
 const ZOOMCONNECTURL=cfg['zoom_wc_link'];
+const ZOOMSCRAPE = cfg['zoom_scrape'];
 const TEST=cfg['test'];
 names = cfg['test_names'];
 
@@ -595,7 +596,7 @@ class Browser {
 		this.ensure_check_meeting_not_started();
 		this.ensure_dialogs_dismissed();
 		this.ensure_leave_url_goes_to_mainurl();
-		if (!ZOOMCONNECTURL)
+		if (!ZOOMSCRAPE)
 			await this.page.goto(this.url.href);
 		this.page.on('close',async (page)=>{
 			delete thispage[page];
@@ -623,9 +624,10 @@ class Browser {
 	}
 
 	async run() {
-		await this.setup_browser();
-		if (ZOOMCONNECTURL)
+		if (ZOOMCONNECTURL) {
+			await this.setup_browser();
 			await this.setup_page();
+		}
 		this.part_list.create_web_server();
 		if (TEST)
 			this.part_list.test();
