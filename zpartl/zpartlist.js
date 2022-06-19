@@ -35,6 +35,12 @@ if (arg=='init')  {
 if (fs.existsSync(arg) && fs.lstatSync(arg).isDirectory()) {
 	arg = path.join(arg,"config.json");
 }
+else if (fs.existsSync(arg) && fs.lstatSync(arg).isFile()) {}
+else  if (!fs.existsSync(arg) ){
+	console.error("arg not config file or directory that contains file");
+	process.exit(1);
+}
+console.log(arg);
 const { chromium } = require('playwright');
 const express = require('express')
 const app = express()
