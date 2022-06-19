@@ -1,3 +1,4 @@
+#! /usr/bin/env node
 const { chromium } = require('playwright');
 const express = require('express')
 const app = express()
