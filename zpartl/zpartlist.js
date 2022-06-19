@@ -608,8 +608,7 @@ class Browser {
 		this.ensure_check_meeting_not_started();
 		this.ensure_dialogs_dismissed();
 		this.ensure_leave_url_goes_to_mainurl();
-		if (!ZOOMSCRAPE)
-			await this.page.goto(this.url.href);
+		await this.page.goto(this.url.href);
 		this.page.on('close',async (page)=>{
 			delete thispage[page];
 			this.setup_vars();
