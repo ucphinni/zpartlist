@@ -1,7 +1,6 @@
 {
   "name": "zpartlist",
-  "version": "0.0.2",
-  "main": "./zpart",
+  "version": "0.0.3",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
