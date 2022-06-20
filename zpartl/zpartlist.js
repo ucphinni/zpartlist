@@ -70,7 +70,7 @@ function toJSON(input) {
 }
 
 console.log(arg);
-const { firefox } = require('playwright');
+const { webkit } = require('playwright');
 const express = require('express');
 const app = express();
 var rawdata = fs.readFileSync(arg);
@@ -453,7 +453,7 @@ class Browser {
 		this.part_list.show_name_to_client(dict['name']);
 	}
 	async setup_browser() {
-		this.browser = await firefox.launch({
+		this.browser = await webkit.launch({
 			headless: HEADLESS,
 		});
 	}
