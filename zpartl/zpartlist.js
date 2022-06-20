@@ -74,7 +74,7 @@ const { firefox } = require('playwright');
 const express = require('express');
 const app = express();
 var rawdata = fs.readFileSync(arg);
-const cfg = JSON.parse(toJSON(rawdata));
+const cfg = JSON.parse(toJSON(rawdata.toString('utf8')));
 
 const server = require('http').createServer(app)
 const port = process.env.PORT || cfg['port'];
