@@ -11,7 +11,7 @@ var arg = argv[2];
 if (arg=='init')  {
 	const fs = require('fs');
 	const content = `{
-	"test_names": 
+	test_names: 
 	[
 		"James Happy",
 		"John Subtle",
@@ -20,10 +20,11 @@ if (arg=='init')  {
 		"Susan Pillar", 
 		"Sam Upbuilding"
 	],
-	"test":true,
-	"zoom_scrape": false,
-	"port": 3000,
-	"zoom_wc_link": "https://us02web.zoom.us/wc/<meetingid>/join?pwd=<pwd>"
+	headless:false,
+	test:true,
+	zoom_scrape: false,
+	port: 3000,
+	zoom_wc_link: "", // ENTER INVITE URL HERE!
 }`;
 	try {
 		fs.writeFileSync('config.json', content);
@@ -41,12 +42,39 @@ else  if (!fs.existsSync(arg) ){
 	console.error("arg not config file or directory that contains file");
 	process.exit(1);
 }
+function toJSON(input) {
+	var UNESCAPE_MAP = { '\\"': '"', "\\`": "`", "\\'": "'" };
+	var ML_ESCAPE_MAP = {'\n': '\\n', "\r": '\\r', "\t": '\\t', '"': '\\"'};
+	function unescapeQuotes(r) { return UNESCAPE_MAP[r] || r; }
+
+	return input.replace(/`(?:\\.|[^`])*`|'(?:\\.|[^'])*'|"(?:\\.|[^"])*"|\/\*[^]*?\*\/|\/\/.*\n?/g, // pass 1: remove comments
+						 function(s) {
+		if (s.charAt(0) == '/')
+			return '';
+		else  
+			return s;
+	})
+	.replace(/(?:true|false|null)(?=[^\w_$]|$)|([a-zA-Z_$][\w_$]*)|`((?:\\.|[^`])*)`|'((?:\\.|[^'])*)'|"(?:\\.|[^"])*"|(,)(?=\s*[}\]])/g, // pass 2: requote
+						 function(s, identifier, multilineQuote, singleQuote, lonelyComma) {
+		if (lonelyComma)
+			return '';
+		else if (identifier != null)
+				return '"' + identifier + '"';
+		else if (multilineQuote != null)
+			return '"' + multilineQuote.replace(/\\./g, unescapeQuotes).replace(/[\n\r\t"]/g, function(r) { return ML_ESCAPE_MAP[r]; }) + '"';
+		else if (singleQuote != null)
+			return '"' + singleQuote.replace(/\\./g, unescapeQuotes).replace(/"/g, '\\"') + '"';
+		else
+			return s;
+	});
+}
+
 console.log(arg);
-const { chromium } = require('playwright');
+const { firefox } = require('playwright');
 const express = require('express');
 const app = express();
 const rawdata = fs.readFileSync(arg);
-const cfg = JSON.parse(rawdata);
+const cfg = JSON.parse(toJSON(rawdata));
 
 const server = require('http').createServer(app)
 const port = process.env.PORT || cfg['port'];
@@ -66,6 +94,7 @@ if (rxa.length) {
 	console.warn(res);
 	cfg['zoom_wc_link'] = res;
 }
+const HEADLESS = false || cfg['headless'];
 const ZOOMCONNECTURL=cfg['zoom_wc_link'];
 const ZOOMSCRAPE = cfg['zoom_scrape'];
 const TEST=cfg['test'];
@@ -424,9 +453,8 @@ class Browser {
 		this.part_list.show_name_to_client(dict['name']);
 	}
 	async setup_browser() {
-		this.browser = await chromium.launch({
-			channel: 'msedge', // or 'chrome', 'chrome-beta', 'msedge-beta', 'msedge-dev', etc.
-			headless: true,
+		this.browser = await firefox.launch({
+			headless: HEADLESS,
 		});
 	}
 	async setup_page() {
