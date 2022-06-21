@@ -264,7 +264,8 @@ class Browser {
 //					await page.waitForSelector(xpath,{state: 'detached'});
 //					await page.evaluate(async()=> await meetingNotStartedStatus(false));
 				}
-				catch(e) {					
+				catch(e) {
+										
 				}
 			}
 			await page.close();
@@ -295,6 +296,8 @@ class Browser {
 					await this.waitForMeetingEntryStatus(false);
 				}
 				catch(e) {
+					if (page.isClose())
+						break;
 				}
 			}
 		});
@@ -361,6 +364,8 @@ class Browser {
 					break;
 				}
 				catch(e) {
+					if (page.isClosed())
+						break;
 				}
 			}
 			self.stop_video_task_run = false;
@@ -394,6 +399,8 @@ class Browser {
 				}
 				catch (e) {
 					console.log(e);
+					if (page.isClosed())
+						break;
 				}
 			}	
 			self.part_win_task_run = false;
@@ -418,7 +425,10 @@ class Browser {
 					await page.waitForSelector(sel,{state:'visible'});
 					await page.locator(sel).first().click();
 				}
-				catch (e) {}
+				catch (e) {
+					if(page.isClosed())
+						break;
+				}
 			}	
 			self.dialogs_dismissed_task_run = false;
 		});
@@ -518,20 +528,24 @@ class Browser {
 				for (let mutationRecord of mutationList) {
 					if (mutationRecord.type == 'childList'){
 						for (var node of mutationRecord.removedNodes) {
-							if (!node.hasClass("participants-li"))
+							if (!node.classList)
+								continue;
+							if (!node.classList.contains("participants-li"))
 								continue;
 							actlist.push(getPartAttrs(node,'del'));								
 							
 						}
 						for (var node of mutationRecord.addedNodes) {
-							if (!node.hasClass("participants-li"))
+							if (!node.classList)
+								continue;
+							if (!node.classList.contains("participants-li"))
 								continue;
 							actlist.push(getPartAttrs(node,'add'));
 							
 						}
 						continue;
 					}
-					if (!node.hasClass("participants-li"))
+					if (!mutationRecord.target.classList.contains("participants-li"))
 						continue;
 					actlist.push(getPartAttrs(mutationRecord.target,'upd'));
 
@@ -632,10 +646,10 @@ class Browser {
 		
 		this.ensure_meeting_entry();
 		this.ensure_host_there_and_enter_name();
-		this.ensure_stop_incomming_video();
+		// this.ensure_stop_incomming_video();
 		this.ensure_part_list_up();
-		this.ensure_mic_disconnected();
-		this.ensure_computer_audio_tab_closed();
+		// this.ensure_mic_disconnected();
+		//  this.ensure_computer_audio_tab_closed();
 		this.ensure_check_meeting_not_started();
 		this.ensure_dialogs_dismissed();
 		this.ensure_leave_url_goes_to_mainurl();
