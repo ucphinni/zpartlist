@@ -315,22 +315,20 @@ class Browser {
 			self.login_page_task_run = true;
 			const sel = '//title[contains(.,"Zoom meeting on web")]';
 
-			while(true) {
-				try {
-					await page.waitForSelector(sel,{state:'attached'});
-					await this.enteringNameStatus(true);
+			try {
+				await page.waitForSelector(sel,{state:'attached'});
+				await this.enteringNameStatus(true);
 
-					let x = self.page.locator('[placeholder="Your Name"]');
-					await x.click();
-					await x.fill('PartListBot');
-					await page.locator('#joinBtn').click();
-					await this.enteringNameStatus(false);
-
-				}
-				catch(e) {
-					break;
-				}
+				let x = self.page.locator('[placeholder="Your Name"]');
+				await x.click();
+				await x.fill('Part2ListBot');
+				await page.locator('#joinBtn').click();
+				await page.waitForSelector(sel,{state:'hidden'});
+				await this.enteringNameStatus(false);
 			}
+			catch(e) {
+			}
+			
 			self.login_page_task_run = false;
 		});
 	}
@@ -370,27 +368,33 @@ class Browser {
 	}	// as a side effect, this function registers the mutation observer function.
 	ensure_part_list_up() {
 		let self = this;
-		this.page.on('domcontentloaded',async page => {
+		this.page.on('load',async () => {
 			if (self.part_win_task_run)
 					return; // already running;
 			self.part_win_task_run = true;
 			while (true) {
 				try {
+					var page = self.page;
+					if (!page)
+						break;
 					await page.waitForSelector('.meeting-app',{state:'visible'});
 					await page.locator('.meeting-app').first().hover();
 
-					if (await self.page.$('#participants-ul')) {
-						console.log("startPartListObserving");
-						await page.evaluate(()=> startPartListObserving() );
+					if (await page.$('#participants-ul')) {
+						console.log("window.startPartListObservingx");
+						await page.evaluate(() => window.startPartListObserving() );
+						console.log("donestartPartListObserving");
 						await page.waitForSelector('#participants-ul',{state: 'detached'});
-						console.log("stopPartListObserving");
-						await page.evaluate(()=> stopPartListObserving() );
+						console.log("window.stopPartListObserving");
+						await page.evaluate(() => window.stopPartListObserving() );
 						continue;
 					}
 					await page.locator('//button[contains(., "Participants")]').first().click();
 					await page.waitForSelector('#participants-ul',{state: 'attached',timeout:2000});
 				}
-				catch (e) {}
+				catch (e) {
+					console.log(e);
+				}
 			}	
 			self.part_win_task_run = false;
 		});
@@ -422,6 +426,7 @@ class Browser {
 	partClear() {
 		console.log("participant clear");
 		this.part_list.clear();
+		console.log("participant clear2");
 	}
 	partBegin() {
 	}
@@ -465,7 +470,7 @@ class Browser {
 		this.page = await context.newPage();
 		this.page.setDefaultTimeout(3*3600 *1000);
 		
-		await this.page.addInitScript(async () => {
+		await this.page.addInitScript(() => {
 			delete window.navigator.serviceWorker;
 			window.asleep = async function(ms) {
 				return new Promise(resolve => setTimeout(resolve, ms));
@@ -478,16 +483,14 @@ class Browser {
 				while (node.parentElement.id !== 'participants-ul') {
 					node = node.parentElement;
 				}
-				var nameNode = document.evaluate('.//span[contains(@class,"participants-item__display-name")]', 
-				node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null );
-				var name = nameNode.singleNodeValue.textContent;
+				var nameNode=node.querySelector(".participants-item__display-name");
+				var name = nameNode.textContent;
 				if (action == 'getname')
 					return name;
-				var labelNode = document.evaluate('.//span[contains(@class,"participants-item__name-label")]', 
-				node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null );
-				var label = labelNode.singleNodeValue.textContent;
+				var labelNode = node.querySelector(".participants-item__name-label");
+				var label = labelNode.textContent;
 
-				str = node.ariaLabel;
+				str = node.getAttribute('aria-label');
 				if (str.includes(name))
 					str = str.replace(name,"");
 				
@@ -515,20 +518,20 @@ class Browser {
 				for (let mutationRecord of mutationList) {
 					if (mutationRecord.type == 'childList'){
 						for (var node of mutationRecord.removedNodes) {
-							if (node.parentNode !==  window.partListUlNode)
+							if (!node.hasClass("participants-li"))
 								continue;
 							actlist.push(getPartAttrs(node,'del'));								
 							
 						}
 						for (var node of mutationRecord.addedNodes) {
-							if (node.parentNode !==  window.partListUlNode)
+							if (!node.hasClass("participants-li"))
 								continue;
 							actlist.push(getPartAttrs(node,'add'));
 							
 						}
 						continue;
 					}
-					if (mutationRecord.target.parentNode !==  window.partListUlNode)
+					if (!node.hasClass("participants-li"))
 						continue;
 					actlist.push(getPartAttrs(mutationRecord.target,'upd'));
 
@@ -541,7 +544,7 @@ class Browser {
 				let names = {}
 				let actlisttmp = [];
 				console.log("processPartList");
-				for (var node of window.partListUlNode.children) {
+				for (var node of window.partListUlNode.querySelectorAll(".participants-li")) {
 					var name = getPartAttrs(node,'getname');
 					if (!(name in names))
 						names[name] = 1;
@@ -578,7 +581,7 @@ class Browser {
 				window.partListObserver.disconnect();
 				partClear();
 				processPartList(null);
-				window.partListObserver.observe(window.partListUlNode,{
+				 window.partListObserver.observe(window.partListUlNode,{
 					attributeFilter:['aria-label'],
 					attributeOldValue:true,
 					attributes:true,childList:true, subtree:true})
