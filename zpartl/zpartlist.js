@@ -70,7 +70,7 @@ function toJSON(input) {
 }
 
 console.log(arg);
-const { webkit } = require('playwright');
+const { webkit ,chromium  } = require('playwright');
 const express = require('express');
 const app = express();
 var rawdata = fs.readFileSync(arg);
@@ -296,7 +296,7 @@ class Browser {
 					await this.waitForMeetingEntryStatus(false);
 				}
 				catch(e) {
-					if (page.isClose())
+					if (page.isClosed())
 						break;
 				}
 			}
@@ -448,10 +448,12 @@ class Browser {
 		
 	}
 	partDel(name) {
+		console.log("participant del");
 		this.part_list.remove_name(name);
 
 	}
 	partMe(pa) {
+		console.log("participant me");
 		this.videoon = !pa["videooff"];
 		this.audioconnected = pa["audioconnected"];
 		if (!this.videoon && !this.audioconnected && this.hovertimer) {
@@ -465,10 +467,11 @@ class Browser {
 		}
 	}
 	partUpd(dict,oldDict) {
+		console.log("participant updf");
 		this.part_list.show_name_to_client(dict['name']);
 	}
 	async setup_browser() {
-		this.browser = await webkit.launch({
+		this.browser = await chromium.launch({
 			headless: HEADLESS,
 		});
 	}
@@ -488,15 +491,10 @@ class Browser {
 			window.addEventListener('unload', function () {
 				document.documentElement.innerHTML = '';
 			});
-			window.getPartAttrs= (node,action)=> {
+			window.getPartAttrs= (node)=> {
 				let str;
-				while (node.parentElement.id !== 'participants-ul') {
-					node = node.parentElement;
-				}
 				var nameNode=node.querySelector(".participants-item__display-name");
 				var name = nameNode.textContent;
-				if (action == 'getname')
-					return name;
 				var labelNode = node.querySelector(".participants-item__name-label");
 				var label = labelNode.textContent;
 
@@ -509,95 +507,78 @@ class Browser {
 
 				
 				let ret = {};
-				ret['aria-label'] = node.ariaLabel;
 				ret['name'] = name;
 				ret['handup'] = str.includes(' hand raised');
 				ret['unmuted'] = str.includes(' audio unmuted');
 				ret['audioconnected'] = !str.includes('no audio connected');
 				ret['videooff'] = str.includes("video off");
-				ret['action'] = action;
 				ret['me'] = label.includes("me") || label.includes("Me");
-				if (!ret['me'])
-					ret['node'] = node;
 
 				return ret;
 			};
 			window.partListUlNode = null;
-			window.partListObserver = new MutationObserver(async (mutationList,obs) => {
-				var actlist = [];
-				for (let mutationRecord of mutationList) {
-					if (mutationRecord.type == 'childList'){
-						for (var node of mutationRecord.removedNodes) {
-							if (!node.classList)
-								continue;
-							if (!node.classList.contains("participants-li"))
-								continue;
-							actlist.push(getPartAttrs(node,'del'));								
-							
-						}
-						for (var node of mutationRecord.addedNodes) {
-							if (!node.classList)
-								continue;
-							if (!node.classList.contains("participants-li"))
-								continue;
-							actlist.push(getPartAttrs(node,'add'));
-							
-						}
+			window.curracts = {};
+			window.partListObserver = new MutationObserver(() => {
+				console.log("mutation")
+				var touched = {}
+				var chged = {}
+				
+				for (var node of window.partListUlNode.querySelectorAll(".participants-li")) {
+					var itm = getPartAttrs(node);
+					if (touched[itm.name] == 'del')
+						continue;
+					if (!touched[itm.name] &&  !(itm.name in window.curracts)) {
+						chged[itm.name] = touched[itm.name] = true;
+						window.curracts[itm.name] = itm;
+						itm.action = 'add';
 						continue;
 					}
-					if (!mutationRecord.target.classList.contains("participants-li"))
-						continue;
-					actlist.push(getPartAttrs(mutationRecord.target,'upd'));
-
+					var citm =window.curracts[itm.name];
+					
+					if (!touched[itm.name] && citm.action === "add") {
+						touched[itm.name] = true;
+						itm.action = "add";
+						if (citm != itm) {
+							chged[itm.name] = true;
+							window.curracts[itm.name] = itm;						
+						}
+						continue;	
+					}
+					touched[itm.name] = 'del';
+					chg[itm.name] = true;
 				}
-				if (!actlist.length)
-					return;
-				processPartList(actlist);
-			});
-			window.processPartList = (actlist) => { 
-				let names = {}
-				let actlisttmp = [];
-				console.log("processPartList");
-				for (var node of window.partListUlNode.querySelectorAll(".participants-li")) {
-					var name = getPartAttrs(node,'getname');
-					if (!(name in names))
-						names[name] = 1;
-					else
-						++names[name];
-					if (actlist === null)
-						actlisttmp.push(getPartAttrs(node,"add"));
-				}
-				if (actlist === null)
-					actlist = actlisttmp;
-
-				accounted4names = {};
-
+				var dels = [];
 				partBegin();				
-				for (var pa of actlist) {
-					if (pa['name'] in accounted4names)
+				for (var name in window.curracts) {
+					var pa = window.curracts[name];
+					if (!chged[name])
 						continue;
-					accounted4names[pa['name']] = true;
 					if (pa['me']) {
 						partMe(pa);
 						continue;
 					}
-					const del = names[pa['name']] != 1 || pa['action'] == 'del' || pa['unmuted'] || !pa['handup'];;
-					if (del)
-						partDel(pa['name']);
+					const del = !touched[pa.name] || pa.action == 'del' || pa.unmuted || !pa.handup;
+					if (del) {
+						partDel(name);
+						dels.push(name);
+					}
+					else if (pa.action =='add')
+						partAdd(name);
 					else
-						partAdd(pa['name']);
+						partUpd(name);
 				}
-				partEnd();
-			};
+				for (var d in dels)
+					delete window.curracts[d];
+				partEnd();			
+			});
 			window.startPartListObserving = () => {
 				console.log("starting part list observing");
 				window.partListUlNode = window.document.getElementById('participants-ul');
 				window.partListObserver.disconnect();
 				partClear();
-				processPartList(null);
-				 window.partListObserver.observe(window.partListUlNode,{
+				window.curracts = {};
+				window.partListObserver.observe(window.partListUlNode,{
 					attributeFilter:['aria-label'],
-					attributeOldValue:true,
 					attributes:true,childList:true, subtree:true})
 				console.log("starting part list observing setup done");
 			};
