@@ -373,9 +373,10 @@ class Browser {
 	}	// as a side effect, this function registers the mutation observer function.
 	async processPartListWindow(page) {
 		await page.waitForFunction(() => {
-			if (!window.watchingPartListUlNode) {
-				window.watchingPartListUlNode = true;
 			(async() => {
+				if (window.watchingPartListUlNode)
+					return;
+				window.watchingPartListUlNode = true;
 				function getPartAttrs(node) {
 					let str;
 					let nameNode=node.querySelector(".participants-item__display-name");
@@ -422,7 +423,10 @@ class Browser {
 						if (!touched[itm.name] && citm.action === "add") {
 							touched[itm.name] = true;
 							itm.action = "add";
-							if (citm != itm) {
+							if (citm.action == itm.action && citm.name == itm.name && (itm.action == "add" && citm.audioconnected == itm.audioconnected &&
+							citm.handup == itm.handup && citm.me == itm.me  && 
+							citm.muted==itm.muted || itm.action != "add")) {}
+							else{
 								chged[itm.name] = true;
 								curracts[itm.name] = itm;						
 							}
@@ -478,7 +482,7 @@ class Browser {
 				partClear();
 
 			})();
-			}
+
 			return ! window.document.getElementById('participants-ul');
 		},{timeout:0});	
 	}
@@ -554,8 +558,11 @@ class Browser {
 		console.log("participant clear2");
 	}
 	partBegin() {
+		console.log("partBegin")
 	}
 	partEnd() {
+		console.log("partEnd")
+
 	}
 	partAdd(name) {
 		console.log("participant added");
@@ -710,7 +717,7 @@ class Browser {
 	}
 
 	async run() {
-		if (ZOOMCONNECTURL) {
+		if (ZOOMSCRAPE) {
 			await this.setup_browser();
 			await this.setup_page();
 		}
