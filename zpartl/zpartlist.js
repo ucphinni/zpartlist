@@ -436,7 +436,8 @@ class Browser {
 						chg[itm.name] = true;
 					}
 					let dels = [];
-					partBegin();				
+					if (Object.keys(chged).length !== 0)
+						partBegin();				
 					for (let name in curracts) {
 						let pa = curracts[name];
 						if (!chged[name])
@@ -457,7 +458,8 @@ class Browser {
 					}
 					for (let d in dels)
 						delete curracts[d];
-					partEnd();			
+					if (Object.keys(chged).length !== 0)
+						partEnd();			
 				});
 				
 				partClear();
