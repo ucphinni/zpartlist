@@ -27,7 +27,7 @@ if (arg=='init')  {
 	zoom_wc_link: "", // ENTER INVITE URL HERE!
 }`;
 	try {
-		fs.writeFileSync('config.json', content);
+		fs.writeFileSync('config.hson', content);
 	} catch (err) {	
 		console.error(err);
 		process.exit(1);
@@ -35,7 +35,7 @@ if (arg=='init')  {
 	process.exit(0);
 }	
 if (fs.existsSync(arg) && fs.lstatSync(arg).isDirectory()) {
-	arg = path.join(arg,"config.json");
+	arg = path.join(arg,"config.hson");
 }
 else if (fs.existsSync(arg) && fs.lstatSync(arg).isFile()) {}
 else  if (!fs.existsSync(arg) ){
@@ -606,9 +606,17 @@ class Browser {
 		this.part_list.show_name_to_client(dict['name']);
 	}
 	async setup_browser() {
-		this.browser = await chromium.launch({
-			headless: HEADLESS,
-		});
+		// Chromium is more easily debugable but webkit is more performant.
+		if (!HEADLESS) {
+			this.browser = await chromium.launch({
+				headless: HEADLESS,
+			});
+		}
+		else {
+			this.browser = await webkit.launch({
+				headless: HEADLESS,
+			});
+		}
 	}
 	async setup_page() {
 		let context = await this.browser.newContext({
