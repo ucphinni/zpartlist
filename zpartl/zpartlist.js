@@ -43,8 +43,8 @@ else  if (!fs.existsSync(arg) ){
 	process.exit(1);
 }
 function toJSON(input) {
-	var UNESCAPE_MAP = { '\\"': '"', "\\`": "`", "\\'": "'" };
-	var ML_ESCAPE_MAP = {'\n': '\\n', "\r": '\\r', "\t": '\\t', '"': '\\"'};
+	let UNESCAPE_MAP = { '\\"': '"', "\\`": "`", "\\'": "'" };
+	let ML_ESCAPE_MAP = {'\n': '\\n', "\r": '\\r', "\t": '\\t', '"': '\\"'};
 	function unescapeQuotes(r) { return UNESCAPE_MAP[r] || r; }
 
 	return input.replace(/`(?:\\.|[^`])*`|'(?:\\.|[^'])*'|"(?:\\.|[^"])*"|\/\*[^]*?\*\/|\/\/.*\n?/g, // pass 1: remove comments
@@ -73,7 +73,7 @@ console.log(arg);
 const { webkit ,chromium  } = require('playwright');
 const express = require('express');
 const app = express();
-var rawdata = fs.readFileSync(arg);
+let rawdata = fs.readFileSync(arg);
 const cfg = JSON.parse(toJSON(rawdata.toString('utf8')));
 
 const server = require('http').createServer(app)
@@ -83,8 +83,8 @@ app.use(express.static(path.join(__dirname + '/public')));
 app.use('/scripts',express.static(__dirname + '/node_modules/fontmetrics/output'));
 let names;
 const rx = /^(https?\:\/\/.*?\/)j(\/.*?)\?(.*)$/;
-var rxa = rx.exec(cfg['zoom_wc_link']);
-var res = '';
+let rxa = rx.exec(cfg['zoom_wc_link']);
+let res = '';
 if (rxa.length) {
 	res += rxa[1];
 	res += 'wc';
@@ -159,7 +159,7 @@ class PartList {
 	}
 	create_web_server() {
 		io.on('connection', socket => {
-			for (var nmobj of this.working_namelist) {
+			for (let nmobj of this.working_namelist) {
 				socket.emit('putName', nmobj);
 			}
 		})
@@ -371,25 +371,140 @@ class Browser {
 			self.stop_video_task_run = false;
 		});
 	}	// as a side effect, this function registers the mutation observer function.
+	async processPartListWindow(page) {
+		await page.waitForFunction(() => {
+			if (!window.watchingPartListUlNode) {
+				window.watchingPartListUlNode = true;
+			(async() => {
+				function getPartAttrs(node) {
+					let str;
+					let nameNode=node.querySelector(".participants-item__display-name");
+					let name = nameNode.textContent;
+					let labelNode = node.querySelector(".participants-item__name-label");
+					let label = labelNode.textContent;
+	
+					str = node.getAttribute('aria-label');
+					if (str.includes(name))
+						str = str.replace(name,"");
+					
+					if (str.includes(label))
+						str = str.replace(label,"");
+	
+					
+					let ret = {};
+					ret['name'] = name;
+					ret['handup'] = str.includes(' hand raised');
+					ret['unmuted'] = str.includes(' audio unmuted');
+					ret['audioconnected'] = !str.includes('no audio connected');
+					ret['videooff'] = str.includes("video off");
+					ret['me'] = label.includes("me") || label.includes("Me");
+	
+					return ret;
+				};
+				let curracts = {};
+				let partListObserver = new MutationObserver(() => {
+					console.log("mutation")
+					let touched = {}
+					let chged = {}
+					
+					for (let node of window.partListUlNode.querySelectorAll(".participants-li")) {
+						let itm = getPartAttrs(node);
+						if (touched[itm.name] == 'del')
+							continue;
+						if (!touched[itm.name] &&  !(itm.name in curracts)) {
+							chged[itm.name] = touched[itm.name] = true;
+							curracts[itm.name] = itm;
+							itm.action = 'add';
+							continue;
+						}
+						let citm =curracts[itm.name];
+						
+						if (!touched[itm.name] && citm.action === "add") {
+							touched[itm.name] = true;
+							itm.action = "add";
+							if (citm != itm) {
+								chged[itm.name] = true;
+								curracts[itm.name] = itm;						
+							}
+							continue;	
+						}
+						touched[itm.name] = 'del';
+						chg[itm.name] = true;
+					}
+					let dels = [];
+					partBegin();				
+					for (let name in curracts) {
+						let pa = curracts[name];
+						if (!chged[name])
+							continue;
+						if (pa['me']) {
+							partMe(pa);
+							continue;
+						}
+						const del = !touched[pa.name] || pa.action == 'del' || pa.unmuted || !pa.handup;
+						if (del) {
+							partDel(name);
+							dels.push(name);
+						}
+						else if (pa.action =='add')
+							partAdd(name);
+						else
+							partUpd(name);
+					}
+					for (let d in dels)
+						delete curracts[d];
+					partEnd();			
+				});
+				
+				partClear();
+				console.log("starting part list observing setup done");
+				while(true) {
+					let o = window.partListUlNode;
+					window.partListUlNode = window.document.getElementById('participants-ul');
+					if (o !== window.partListUlNode && window.partListUlNode) {
+						partListObserver.disconnect();
+						partListObserver.observe(window.partListUlNode,{
+							attributeFilter:['aria-label'],
+							attributes:true,childList:true, subtree:true})					
+					}
+					if (!window.partListUlNode)
+						break;
+					await window.asleep(2000);
+
+				}
+				
+				partListObserver.disconnect();
+				window.watchingPartListUlNode = false;
+				partClear();
+
+			})();
+			}
+			return ! window.document.getElementById('participants-ul');
+		},{timeout:0});	
+	}
+
 	ensure_part_list_up() {
 		let self = this;
 		this.page.on('load',async () => {
 			if (self.part_win_task_run)
 					return; // already running;
 			self.part_win_task_run = true;
+			let page = self.page;
 			while (true) {
 				try {
-					var page = self.page;
 					if (!page)
 						break;
 					await page.waitForSelector('.meeting-app',{state:'visible'});
 					await page.locator('.meeting-app').first().hover();
 
 					if (await page.$('#participants-ul')) {
-						console.log("window.startPartListObservingx");
+						console.log("window.startPartListObserving");
+						await self.processPartListWindow(page);
+						console.log("done window.startPartListObserving");
+
+						continue;
 						await page.evaluate(() => window.startPartListObserving() );
 						console.log("donestartPartListObserving");
-						await page.waitForSelector('#participants-ul',{state: 'detached'});
 						console.log("window.stopPartListObserving");
 						await page.evaluate(() => window.stopPartListObserving() );
 						continue;
@@ -466,6 +581,26 @@ class Browser {
 			},10000);
 		}
 	}
+	 waitForSelectorDetach(selector) {
+		if (this.page && !this.page.isClosed()) {
+			console.log("waiting for selector "+selector);
+			let self = this;
+			( async ()=>{
+				try {
+		
+					await self.page.waitForSelector(selector,{state: 'attached',timeout:0});
+								console.log("waitingw for selector "+selector);
+
+					await self.page.waitForSelector(selector,{state: 'detached',timeout:0});				
+					
+				}
+				catch(e) {
+					
+				}
+			})();
+			console.log("done waiting for selector "+selector);
+		}
+	}
 	partUpd(dict,oldDict) {
 		console.log("participant updf");
 		this.part_list.show_name_to_client(dict['name']);
@@ -491,102 +626,6 @@ class Browser {
 			window.addEventListener('unload', function () {
 				document.documentElement.innerHTML = '';
 			});
-			window.getPartAttrs= (node)=> {
-				let str;
-				var nameNode=node.querySelector(".participants-item__display-name");
-				var name = nameNode.textContent;
-				var labelNode = node.querySelector(".participants-item__name-label");
-				var label = labelNode.textContent;
-
-				str = node.getAttribute('aria-label');
-				if (str.includes(name))
-					str = str.replace(name,"");
-				
-				if (str.includes(label))
-					str = str.replace(label,"");
-
-				
-				let ret = {};
-				ret['name'] = name;
-				ret['handup'] = str.includes(' hand raised');
-				ret['unmuted'] = str.includes(' audio unmuted');
-				ret['audioconnected'] = !str.includes('no audio connected');
-				ret['videooff'] = str.includes("video off");
-				ret['me'] = label.includes("me") || label.includes("Me");
-
-				return ret;
-			};
-			window.partListUlNode = null;
-			window.curracts = {};
-			window.partListObserver = new MutationObserver(() => {
-				console.log("mutation")
-				var touched = {}
-				var chged = {}
-				
-				for (var node of window.partListUlNode.querySelectorAll(".participants-li")) {
-					var itm = getPartAttrs(node);
-					if (touched[itm.name] == 'del')
-						continue;
-					if (!touched[itm.name] &&  !(itm.name in window.curracts)) {
-						chged[itm.name] = touched[itm.name] = true;
-						window.curracts[itm.name] = itm;
-						itm.action = 'add';
-						continue;
-					}
-					var citm =window.curracts[itm.name];
-					
-					if (!touched[itm.name] && citm.action === "add") {
-						touched[itm.name] = true;
-						itm.action = "add";
-						if (citm != itm) {
-							chged[itm.name] = true;
-							window.curracts[itm.name] = itm;						
-						}
-						continue;	
-					}
-					touched[itm.name] = 'del';
-					chg[itm.name] = true;
-				}
-				var dels = [];
-				partBegin();				
-				for (var name in window.curracts) {
-					var pa = window.curracts[name];
-					if (!chged[name])
-						continue;
-					if (pa['me']) {
-						partMe(pa);
-						continue;
-					}
-					const del = !touched[pa.name] || pa.action == 'del' || pa.unmuted || !pa.handup;
-					if (del) {
-						partDel(name);
-						dels.push(name);
-					}
-					else if (pa.action =='add')
-						partAdd(name);
-					else
-						partUpd(name);
-				}
-				for (var d in dels)
-					delete window.curracts[d];
-				partEnd();			
-			});
-			window.startPartListObserving = () => {
-				console.log("starting part list observing");
-				window.partListUlNode = window.document.getElementById('participants-ul');
-				window.partListObserver.disconnect();
-				partClear();
-				window.curracts = {};
-				window.partListObserver.observe(window.partListUlNode,{
-					attributeFilter:['aria-label'],
-					attributes:true,childList:true, subtree:true})
-				console.log("starting part list observing setup done");
-			};
-			window.stopPartListObserving = () => {
-				console.log("stop part list observing ");
-				window.partListObserver.disconnect();
-				partClear();
-			};
 		});
 		await this.page.route('**/*',(req)=> {
 			if (["media","image","font","texttrack","manifest","other"].includes(req.request().resourceType())) {
@@ -624,7 +663,9 @@ class Browser {
 		await this.page.exposeBinding('partListStatus', async ({ page } , begin) => {
 			await thispage[page].partListStatus(begin)
 		});
-		
+		await this.page.exposeBinding('waitForSelectorDetach', async ({ page } ,selector) => {
+			await thispage[page].waitForSelectorDetach(selector)
+		});
 		this.ensure_meeting_entry();
 		this.ensure_host_there_and_enter_name();
 		// this.ensure_stop_incomming_video();
