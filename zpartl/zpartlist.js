@@ -3,6 +3,7 @@
 const { argv } = require('node:process');
 const fs = require('fs');
 const path = require('path');
+
 if (argv.length != 3) {
 	console.log("zpartlist (init|<dir>|<config file>)");
 	process.exit(1);
@@ -11,6 +12,7 @@ var arg = argv[2];
 if (arg=='init')  {
 	const fs = require('fs');
 	const content = `{
+// This file is in hson format. (json with comments)
 	test_names: 
 	[
 		"James Happy",
@@ -22,8 +24,9 @@ if (arg=='init')  {
 	],
 	headless:false,
 	test:true,
+	webkit:false, // use chromium if false.
 	zoom_scrape: false,
-	port: 3000,
+	port: 3000, // port of part list server.
 	zoom_wc_link: "", // ENTER INVITE URL HERE!
 }`;
 	try {
@@ -95,6 +98,7 @@ if (rxa.length) {
 	cfg['zoom_wc_link'] = res;
 }
 const HEADLESS = false || cfg['headless'];
+const USEWEBKIT = false || cfg['webkit'];
 const ZOOMCONNECTURL=cfg['zoom_wc_link'];
 const ZOOMSCRAPE = cfg['zoom_scrape'];
 const TEST=cfg['test'];
@@ -324,7 +328,7 @@ class Browser {
 
 				let x = self.page.locator('[placeholder="Your Name"]');
 				await x.click();
-				await x.fill('Part2ListBot');
+				await x.fill('Part3ListBot');
 				await page.locator('#joinBtn').click();
 				await page.waitForSelector(sel,{state:'hidden'});
 				await this.enteringNameStatus(false);
@@ -371,123 +375,6 @@ class Browser {
 			self.stop_video_task_run = false;
 		});
 	}	// as a side effect, this function registers the mutation observer function.
-	async processPartListWindow(page) {
-		await page.waitForFunction(() => {
-			(async() => {
-				if (window.watchingPartListUlNode)
-					return;
-				window.watchingPartListUlNode = true;
-				function getPartAttrs(node) {
-					let str;
-					let nameNode=node.querySelector(".participants-item__display-name");
-					let name = nameNode.textContent;
-					let labelNode = node.querySelector(".participants-item__name-label");
-					let label = labelNode.textContent;
-	
-					str = node.getAttribute('aria-label');
-					if (str.includes(name))
-						str = str.replace(name,"");
-					
-					if (str.includes(label))
-						str = str.replace(label,"");
-	
-					
-					let ret = {};
-					ret['name'] = name;
-					ret['handup'] = str.includes(' hand raised');
-					ret['unmuted'] = str.includes(' audio unmuted');
-					ret['audioconnected'] = !str.includes('no audio connected');
-					ret['videooff'] = str.includes("video off");
-					ret['me'] = label.includes("me") || label.includes("Me");
-	
-					return ret;
-				};
-				let curracts = {};
-				let partListObserver = new MutationObserver(() => {
-					console.log("mutation")
-					let touched = {}
-					let chged = {}
-					
-					for (let node of window.partListUlNode.querySelectorAll(".participants-li")) {
-						let itm = getPartAttrs(node);
-						if (touched[itm.name] == 'del')
-							continue;
-						if (!touched[itm.name] &&  !(itm.name in curracts)) {
-							chged[itm.name] = touched[itm.name] = true;
-							curracts[itm.name] = itm;
-							itm.action = 'add';
-							continue;
-						}
-						let citm =curracts[itm.name];
-						
-						if (!touched[itm.name] && citm.action === "add") {
-							touched[itm.name] = true;
-							itm.action = "add";
-							if (citm.action == itm.action && citm.name == itm.name && (itm.action == "add" && citm.audioconnected == itm.audioconnected &&
-							citm.handup == itm.handup && citm.me == itm.me  && 
-							citm.muted==itm.muted || itm.action != "add")) {}
-							else{
-								chged[itm.name] = true;
-								curracts[itm.name] = itm;						
-							}
-							continue;	
-						}
-						touched[itm.name] = 'del';
-						chg[itm.name] = true;
-					}
-					let dels = [];
-					if (Object.keys(chged).length !== 0)
-						partBegin();				
-					for (let name in curracts) {
-						let pa = curracts[name];
-						if (!chged[name])
-							continue;
-						if (pa['me']) {
-							partMe(pa);
-							continue;
-						}
-						const del = !touched[pa.name] || pa.action == 'del' || pa.unmuted || !pa.handup;
-						if (del) {
-							partDel(name);
-							dels.push(name);
-						}
-						else if (pa.action =='add')
-							partAdd(name);
-						else
-							partUpd(name);
-					}
-					for (let d in dels)
-						delete curracts[d];
-					if (Object.keys(chged).length !== 0)
-						partEnd();			
-				});
-				
-				partClear();
-				console.log("starting part list observing setup done");
-				while(true) {
-					let o = window.partListUlNode;
-					window.partListUlNode = window.document.getElementById('participants-ul');
-					if (o !== window.partListUlNode && window.partListUlNode) {
-						partListObserver.disconnect();
-						partListObserver.observe(window.partListUlNode,{
-							attributeFilter:['aria-label'],
-							attributes:true,childList:true, subtree:true})					
-					}
-					if (!window.partListUlNode)
-						break;
-					await window.asleep(2000);
-
-				}
-				
-				partListObserver.disconnect();
-				window.watchingPartListUlNode = false;
-				partClear();
-
-			})();
-
-			return ! window.document.getElementById('participants-ul');
-		},{timeout:0});	
-	}
 
 	ensure_part_list_up() {
 		let self = this;
@@ -502,19 +389,7 @@ class Browser {
 						break;
 					await page.waitForSelector('.meeting-app',{state:'visible'});
 					await page.locator('.meeting-app').first().hover();
-
-					if (await page.$('#participants-ul')) {
-						console.log("window.startPartListObserving");
-						await self.processPartListWindow(page);
-						console.log("done window.startPartListObserving");
-
-						continue;
-						await page.evaluate(() => window.startPartListObserving() );
-						console.log("donestartPartListObserving");
-						console.log("window.stopPartListObserving");
-						await page.evaluate(() => window.stopPartListObserving() );
-						continue;
-					}
+					await page.waitForSelector('#participants-ul',{state: 'detached'});
 					await page.locator('//button[contains(., "Participants")]').first().click();
 					await page.waitForSelector('#participants-ul',{state: 'attached',timeout:2000});
 				}
@@ -555,9 +430,7 @@ class Browser {
 		});
 	}
 	partClear() {
-		console.log("participant clear");
 		this.part_list.clear();
-		console.log("participant clear2");
 	}
 	partBegin() {
 		console.log("partBegin")
@@ -567,12 +440,12 @@ class Browser {
 
 	}
 	partAdd(name) {
-		console.log("participant added");
+		console.log("participant added " + name);
 		this.part_list.show_name_to_client(name);
 		
 	}
 	partDel(name) {
-		console.log("participant del");
+		console.log("participant del " + name);
 		this.part_list.remove_name(name);
 
 	}
@@ -610,13 +483,13 @@ class Browser {
 			console.log("done waiting for selector "+selector);
 		}
 	}
-	partUpd(dict,oldDict) {
+	partUpd(dict) {
 		console.log("participant updf");
 		this.part_list.show_name_to_client(dict['name']);
 	}
 	async setup_browser() {
 		// Chromium is more easily debugable but webkit is more performant.
-		if (!HEADLESS) {
+		if (!USEWEBKIT) {
 			this.browser = await chromium.launch({
 				headless: HEADLESS,
 			});
@@ -643,6 +516,137 @@ class Browser {
 			window.addEventListener('unload', function () {
 				document.documentElement.innerHTML = '';
 			});
+			let curracts = {};
+			function chgchk(chg,ret,key,x) {
+				if (key in ret && !ret[key] && x  ||
+				   !(key in ret) && x ||
+				   key in ret && ret[key] && !x){
+					ret[key] = !!x;
+					chg =  true;
+				}
+				return chg;
+			}
+			let seqno = 0;
+			function getPartAction(node) {
+				let str;
+				let nameNode=node.querySelector(".participants-item__display-name");
+				let name = nameNode.textContent;
+				let dup = false;
+				let add = false;
+				let labelNode = node.querySelector(".participants-item__name-label");
+				let label = labelNode.textContent;
+
+				str = node.getAttribute('aria-label');
+				if (str.includes(name))
+					str = str.replace(name,"");
+				
+				if (str.includes(label))
+					str = str.replace(label,"");
+
+				let chg,ret,delvals;
+				if (name in curracts) {
+					ret = curracts[name];
+					add = ret.seqno + 1 < seqno;
+					delvals = add;
+				}
+				else {
+					add = true;
+					curracts[name] = ret = {};
+				}
+				dup = ret.seqno >= seqno;
+				if (!delvals)
+					delvals = dup;
+					
+				if (delvals) {
+					if (!dup)
+						delete ret['dup'];
+					delete ret['handup'];
+					delete ret['unmuted'];
+					delete ret['audioconnected'];
+					delete ret['videooff'];
+				}
+				if (add) {
+					ret.name = name;
+					chg = chgchk(true,ret,'me',         label.includes("me") || label.includes("Me"));
+					delete ret['putsent'];
+					
+				}
+				ret.seqno = seqno;
+				chg = chgchk(chg,ret,'dup',            dup);
+				chg = chgchk(chg,ret,'handup',         str.includes(' hand raised'));
+				chg = chgchk(chg,ret,'unmuted',        str.includes(' audio unmuted'));
+				chg = chgchk(chg,ret,'audioconnected',!str.includes('no audio connected'));
+				chg = chgchk(chg,ret,'videooff',       str.includes("video off"));
+
+				ret.action =  dup ? "dup" : add? "add" : chg ?  "upd" : "unchg";
+			}
+			let partListUlNode;
+			let partListObserver = new MutationObserver(() => {
+				let beginSent = false;
+				console.log("mutation")
+				++seqno;				
+				for (let node of partListUlNode.querySelectorAll(".participants-li")) {
+					getPartAction(node);					
+				}
+				for (let name in curracts) {
+					let d = curracts[name];
+					let del = d.seqno +1 == seqno && d.action != "unchg" || d.action != "unchg" &&  d.seqno == seqno && (d.dup || !d.handup);
+					let skip = !(d.seqno == seqno ||  del && d.seqno +1 == seqno) ||  d.action == "unchg";
+					if (skip)
+						continue;
+						
+					if (!beginSent) {
+						beginSent = true;
+						partBegin();
+					}
+
+					if (d.me)
+						partMe(d);
+					else if (del) {
+						if (d.putsent) {
+							partDel(name);
+							d.putsent = false;
+						}
+					}
+					else {
+						partAdd(name);
+						d.putsent = true;
+					}
+				}
+				if (beginSent)
+					partEnd();
+					
+			});
+			partListUlNode = window.document.getElementById('participants-ul');
+			console.log("here");
+			let initpartnode = false;
+			new MutationObserver((mutationRecord)=> {
+				for (let mutation of mutationRecord){
+					for (let node of mutation.removedNodes)
+						if (partListUlNode && node.id === 'participants-ul') {
+							partListObserver.disconnect();
+							partListUlNode = document.getElementById('participants-ul');
+						}
+	
+					if (!mutation.addedNodes.length && initpartnode)
+						continue;
+					var node = document.getElementById('participants-ul');
+					if (!initpartnode) {
+						partListUlNode = null;
+					}
+					if (!partListUlNode && node || !initpartnode) {
+						initpartnode = true;
+						partClear();
+						partListUlNode = node;
+						partListObserver.disconnect();
+						partListObserver.observe(node,{
+							attributeFilter:['aria-label'],
+							attributes:true,childList:true, subtree:true
+						});
+					}
+				}
+			}).observe(document.getRootNode(),{childList:true, subtree:true});
+
 		});
 		await this.page.route('**/*',(req)=> {
 			if (["media","image","font","texttrack","manifest","other"].includes(req.request().resourceType())) {
@@ -654,7 +658,6 @@ class Browser {
 
 		thispage[this.page] = this
 
-		let self = this;
 		// this.page.on('domcontentload',function() {self.load_std_functs(self)} );
 		await this.page.exposeBinding('partClear', async ({ page } ) => {
 			await thispage[page].partClear();
@@ -685,10 +688,13 @@ class Browser {
 		});
 		this.ensure_meeting_entry();
 		this.ensure_host_there_and_enter_name();
-		// this.ensure_stop_incomming_video();
+		if (!USEWEBKIT)
+			this.ensure_stop_incomming_video();
 		this.ensure_part_list_up();
-		// this.ensure_mic_disconnected();
-		//  this.ensure_computer_audio_tab_closed();
+		if (!USEWEBKIT)
+			this.ensure_mic_disconnected();
+		if (!USEWEBKIT)
+			this.ensure_computer_audio_tab_closed();
 		this.ensure_check_meeting_not_started();
 		this.ensure_dialogs_dismissed();
 		this.ensure_leave_url_goes_to_mainurl();
@@ -699,8 +705,7 @@ class Browser {
 			await this.setup_page();
 			
 		});
-		this.page.on('crash',(page)=>{
-		});
+
 	}
 	setup_vars() {
 		this.page = null;
@@ -728,5 +733,10 @@ class Browser {
 			this.part_list.test();
 	}
 };
-browser = new Browser(url);
+var browser = new Browser(url);
 browser.run();
+process.on('SIGINT', function() {
+    console.log("Caught interrupt signal");
+
+        process.exit();
+});
