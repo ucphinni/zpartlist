@@ -3,6 +3,8 @@
 const { argv } = require('node:process');
 const fs = require('fs');
 const path = require('path');
+const request = require('request');
+const cheerio = require('cheerio');
 
 if (argv.length != 3) {
 	console.log("zpartlist (init|<dir>|<config file>)");
@@ -722,11 +724,41 @@ class Browser {
 		this.hovertimer = null;
 		this.part_list = new PartList();
 	}
+	install_wc_browser() {
+		let self = this;
+		async function wait_for_meeting_start() {
+			console.log("attempting to connect to zoom");
+			attempt_to_connect();
+		}
+		async function attempt_to_connect() {
+			request(url.href,async (error,response,body)=>{
+				if (!error && response.statusCode == 200) {}
+				else {
+					console.log(error);
+					setTimeout(wait_for_meeting_start,10000);
+					return;
+				}
+				const $ = cheerio.load(body);
+				if ($("title").text().includes("meeting has not started")) {
+					console.log($("title").text());
+					setTimeout(wait_for_meeting_start,10000);
+					return;
+				}
+				await self.setup_browser();
+				await self.setup_page();
 
+			});
+			
+		}
+		(async()=> {
+			await attempt_to_connect();
+		})();
+		
+	}
+	
 	async run() {
 		if (ZOOMSCRAPE) {
-			await this.setup_browser();
-			await this.setup_page();
+			this.install_wc_browser();
 		}
 		this.part_list.create_web_server();
 		if (TEST)
