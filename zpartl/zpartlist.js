@@ -26,6 +26,7 @@ if (arg=='init')  {
 	],
 	headless:false,
 	test:true,
+	skipmedia:false, // turn on to load faster.
 	webkit:false, // use chromium if false.
 	zoom_scrape: false,
 	port: 3000, // port of part list server.
@@ -103,6 +104,7 @@ const HEADLESS = false || cfg['headless'];
 const USEWEBKIT = false || cfg['webkit'];
 const ZOOMCONNECTURL=cfg['zoom_wc_link'];
 const ZOOMSCRAPE = cfg['zoom_scrape'];
+const SKIPMEDIA = true || cfg['skipmedia'];
 const TEST=cfg['test'];
 names = cfg['test_names'];
 
@@ -441,15 +443,18 @@ class Browser {
 		console.log("partEnd")
 
 	}
-	partAdd(name) {
-		console.log("participant added " + name);
-		this.part_list.show_name_to_client(name);
-		
+	partAdd(d) {
+		console.log("participant added " + d.name);
+		let del = d.dup || !d.handup;
+			
+		if (del)
+			this.part_list.remove_name(d.name);
+		else
+			this.part_list.show_name_to_client(d.name);
 	}
-	partDel(name) {
-		console.log("participant del " + name);
-		this.part_list.remove_name(name);
-
+	partDel(d) {
+		console.log("participant del " + d.name);
+		this.part_list.remove_name(d.name);
 	}
 	partMe(pa) {
 		console.log("participant me");
@@ -484,10 +489,6 @@ class Browser {
 			})();
 			console.log("done waiting for selector "+selector);
 		}
-	}
-	partUpd(dict) {
-		console.log("participant updf");
-		this.part_list.show_name_to_client(dict['name']);
 	}
 	async setup_browser() {
 		// Chromium is more easily debugable but webkit is more performant.
@@ -592,28 +593,23 @@ class Browser {
 				}
 				for (let name in curracts) {
 					let d = curracts[name];
-					let del = d.seqno +1 == seqno && d.action != "unchg" || d.action != "unchg" &&  d.seqno == seqno && (d.dup || !d.handup);
-					let skip = !(d.seqno == seqno ||  del && d.seqno +1 == seqno) ||  d.action == "unchg";
+					let partme = d.me;
+					let del = d.seqno +1 == seqno && d.seqno != 1;
+					let add = d.seqno == seqno;
+					let skip = !(add || del || partme ) ||  d.action == "unchg";
 					if (skip)
 						continue;
-						
-					if (!beginSent) {
+
+					if (!beginSent && (add || del || partme )) {
 						beginSent = true;
 						partBegin();
 					}
-
-					if (d.me)
+					if (partme)
 						partMe(d);
-					else if (del) {
-						if (d.putsent) {
-							partDel(name);
-							d.putsent = false;
-						}
-					}
-					else {
-						partAdd(name);
-						d.putsent = true;
-					}
+					else if (del)
+						partDel(d);
+					else if (add)
+						partAdd(d);
 				}
 				if (beginSent)
 					partEnd();
@@ -650,12 +646,13 @@ class Browser {
 			}).observe(document.getRootNode(),{childList:true, subtree:true});
 
 		});
-		await this.page.route('**/*',(req)=> {
-			if (["media","image","font","texttrack","manifest","other"].includes(req.request().resourceType())) {
-			  return req.abort();
-			}
-			req.continue();
-		});
+		if (SKIPMEDIA)
+			await this.page.route('**/*',(req)=> {
+				if (["media","image","font","texttrack","manifest","other"].includes(req.request().resourceType())) {
+				  return req.abort();
+				}
+				req.continue();
+			});
 		
 
 		thispage[this.page] = this
@@ -679,9 +676,6 @@ class Browser {
 		await this.page.exposeBinding('partDel', async ({ page } , a) => {
 			await thispage[page].partDel(a);
 		});
-		await this.page.exposeBinding('partUpd', async ({ page } , current, old) => {
-			await thispage[page].partUpd(current,old)
-		});
 		await this.page.exposeBinding('partListStatus', async ({ page } , begin) => {
 			await thispage[page].partListStatus(begin)
 		});
@@ -703,9 +697,7 @@ class Browser {
 		await this.page.goto(this.url.href);
 		this.page.on('close',async (page)=>{
 			delete thispage[page];
-			this.setup_vars();
-			await this.setup_page();
-			
+			this.install_wc_browser();			
 		});
 
 	}
