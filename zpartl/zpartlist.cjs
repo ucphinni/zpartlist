@@ -98,7 +98,6 @@ if (rxa.length) {
 	res += rxa[2];
 	res += '/join?';
 	res += rxa[3];
-	console.warn(res);
 	cfg['zoom_wc_link'] = res;
 }
 const HEADLESS = false || cfg['headless'];
@@ -119,9 +118,8 @@ var thispage = {};
 class PartList {
 	show_name_to_client(name) {
 
-		if (this.working_namelist.find((item) => name === item.name)) {
+		if (this.working_namelist.find((item) => name === item.name))
 			return;
-		}
 		// add it.
 		let nmobj = {'name':name,'id':++this.working_id};
 		this.working_namelist.push(nmobj);
@@ -158,13 +156,6 @@ class PartList {
 					this.remove_name(names[curid%names.length]);
 				}
 				curid++;	
-				if (curid % 20)
-					return;
-			/*	ary = []
-				for (let nmobj of working_namelist)
-					ary.push(nmobj.id);
-				for (let id of ary)
-					remove_name_by_id(id); */
 			},500);
 		}
 	}
@@ -259,38 +250,7 @@ class Browser {
 		});
 		
 	}
-	ensure_check_meeting_not_started() {
-		let self = this;
-		this.page.on('load',async page => {
-			if (self.check_meeting_not_started_task_run)
-				return;
-			self.check_meeting_not_started_task_run = true;
-			while (true) {
-				try {				
-					const xpath ='//title[contains(.,"The meeting has not started")]';
-					
-					await self.page.waitForSelector(xpath,{state:'attached'});
-					await this.meetingNotStartedStatus(true);
-					break;
-//					await page.waitForSelector(xpath,{state: 'detached'});
-//					await page.evaluate(async()=> await meetingNotStartedStatus(false));
-				}
-				catch(e) {
-										
-				}
-			}
-			await page.close();
-			self.check_meeting_not_started_task_run = false;
 
-		});
-	}
-	async meetingNotStartedStatus(begin) {
-		if (begin)
-			console.log("meeting not started");
-		else
-			console.log("meeting not started end");
-
-	}
 	
 	ensure_meeting_entry() {
 		let self = this;
@@ -303,7 +263,7 @@ class Browser {
 					const xpath ='[aria-label="Report Waiting Room"]';
 					await page.waitForSelector(xpath);
 					await this.waitForMeetingEntryStatus(true);
-					await page.waitForSelector(xpath,{state: 'detached'});
+					await page.waitForSelector(xpath,{state: 'detached',timeout:0});
 					await this.waitForMeetingEntryStatus(false);
 					break;
 				}
@@ -362,15 +322,15 @@ class Browser {
 			try {
 				if (!page)
 					break;
-				await page.waitForSelector('.meeting-app',{state:'visible'});
-				await page.locator('.meeting-app').first().hover();
+				const loc = page.locator('.meeting-app');
+				await loc.waitFor({timeout:5000});
+				await loc.first().hover();
 				await page.waitForSelector('#participants-ul',{state: 'detached'});
 				const sel = '[aria-label="More meeting control"]';
-				if (this.videoon || this.videoon === null) {
-					await page.waitForSelector(sel,{timeout:5000});
+				if (!USEWEBKIT && (this.videoon || this.videoon === null)) {
 					await page.locator(sel,{timeout:5000}).click();
 					console.log("Looking for"); 
-					if (await page.$('text=Stop Incoming Video'),{timeout:5000}) {
+					if (await page.$('text=Stop Incoming Video'),{timeout:10000}) {
 						await page.locator('text=Stop Incoming Video').click({timeout:10000});
 					}
 					else
@@ -378,7 +338,6 @@ class Browser {
 				}
 				console.log("sel");
 
-				await page.waitForSelector(sel,{timeout:5000});
 				await page.locator(sel,{timeout:5000}).click();
 				console.log("Part?");
 				if (page.$('text=Participants',{timeout:2000}))
@@ -390,43 +349,14 @@ class Browser {
 			}
 
 			catch (e) {
-				if (e.name == 'TimeoutError')
-					continue;
-
-				console.log(e);
+				if (e.name != 'TimeoutError')
+					console.log(e);
 				if (page.isClosed())
 					break;
 			}
 		}
 	}
 
-	ensure_part_list_up() {
-		let self = this;
-		this.page.on('load',async () => {
-			if (self.part_win_task_run)
-					return; // already running;
-			self.part_win_task_run = true;
-			let page = self.page;
-			while (true) {
-				try {
-					if (!page)
-						break;
-					await page.waitForSelector('.meeting-app',{state:'visible'});
-					await page.locator('.meeting-app').first().hover();
-					await page.waitForSelector('#participants-ul',{state: 'detached'});
-					await page.locator('//button[contains(., "Participants")]').first().click();
-					await page.waitForSelector('#participants-ul',{state: 'attached',timeout:2000});
-				}
-				catch (e) {
-					console.log(e);
-					if (page.isClosed())
-						break;
-				}
-			}	
-			self.part_win_task_run = false;
-		});
-
-	}
 	async partListStatus(begin) {
 		if (begin)
 			console.log("partListStatus start");
@@ -442,7 +372,6 @@ class Browser {
 			self.dialogs_dismissed_task_run = true;
 			while (true) {
 				try {
-					await page.waitForSelector(sel,{state:'visible'});
 					await page.locator(sel).first().click();
 				}
 				catch (e) {
@@ -500,26 +429,6 @@ class Browser {
 			},10000);
 		}
 	}
-	 waitForSelectorDetach(selector) {
-		if (this.page && !this.page.isClosed()) {
-			console.log("waiting for selector "+selector);
-			let self = this;
-			( async ()=>{
-				try {
-		
-					await self.page.waitForSelector(selector,{state: 'attached',timeout:0});
-								console.log("waitingw for selector "+selector);
-
-					await self.page.waitForSelector(selector,{state: 'detached',timeout:0});				
-					
-				}
-				catch(e) {
-					
-				}
-			})();
-			console.log("done waiting for selector "+selector);
-		}
-	}
 	async setup_browser() {
 		// Chromium is more easily debugable but webkit is more performant.
 		if (USEWEBKIT) {
@@ -544,9 +453,9 @@ class Browser {
 			viewport: emudevice.viewport,
 			userAgent: emudevice.userAgent,
 		});
-		context.setDefaultTimeout(3*3600*1000);
+//		context.setDefaultTimeout(3*3600*1000);
 		this.page = await context.newPage();
-		this.page.setDefaultTimeout(3*3600 *1000);
+//		this.page.setDefaultTimeout(3*3600 *1000);
 		
 		await this.page.addInitScript(() => {
 			delete window.navigator.serviceWorker;
@@ -714,10 +623,6 @@ class Browser {
 		await this.page.exposeBinding('partListStatus', async ({ page } , begin) => {
 			await thispage[page].partListStatus(begin)
 		});
-		await this.page.exposeBinding('waitForSelectorDetach', async ({ page } ,selector) => {
-			await thispage[page].waitForSelectorDetach(selector)
-		});
-//		this.ensure_check_meeting_not_started();
 		this.ensure_dialogs_dismissed();
 		this.ensure_leave_url_goes_to_mainurl();
 		await this.page.goto(this.url.href);
@@ -751,8 +656,7 @@ class Browser {
 		}
 		async function attempt_to_connect() {
 			request(url.href,async (error,response,body)=>{
-				if (!error && response.statusCode == 200) {}
-				else {
+				if (error || response.statusCode != 200) {
 					console.log(error);
 					setTimeout(wait_for_meeting_start,10000);
 					return;
@@ -769,10 +673,8 @@ class Browser {
 				if (!USEWEBKIT) {
 					self.ensure_mic_disconnected();
 					self.ensure_computer_audio_tab_closed();
-					await self.ensure_main_window_setup();
 				}
-				else
-					self.ensure_part_list_up();
+				await self.ensure_main_window_setup();
 
 			});
 			
@@ -783,10 +685,10 @@ class Browser {
 		
 	}
 	
-	async run() {
-		if (ZOOMSCRAPE) {
+	run() {
+		if (ZOOMSCRAPE)
 			this.install_wc_browser();
-		}
+
 		this.part_list.create_web_server();
 		if (TEST)
 			this.part_list.test();
