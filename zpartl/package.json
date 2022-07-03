@@ -1,10 +1,11 @@
 {
   "name": "zpartlist",
-  "version": "0.0.30",
+  "version": "0.0.38",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+	"postinstall": "playwright install"
   },
-  "bin": "zpartlist.js",
+  "bin": "zpartlist.cjs",
   "homepage": "https://github.com/ucphinni/zpartlist",
   "author": "Cote Phinnizee <ucphinni@gmail.com>",
   "bugs": "https://github.com/ucphinni/zpartlist/issues",

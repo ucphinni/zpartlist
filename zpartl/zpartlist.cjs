@@ -6,6 +6,7 @@ const path = require('path');
 const request = require('request');
 const cheerio = require('cheerio');
 
+
 if (argv.length != 3) {
 	console.log("zpartlist (init|<dir>|<config file>)");
 	process.exit(1);
@@ -76,12 +77,12 @@ function toJSON(input) {
 }
 
 console.log(arg);
-const { webkit ,chromium  } = require('playwright');
+const { webkit ,chromium, firefox, devices  } = require('playwright');
 const express = require('express');
 const app = express();
 let rawdata = fs.readFileSync(arg);
 const cfg = JSON.parse(toJSON(rawdata.toString('utf8')));
-
+const emudevice = devices[cfg['emudevice'] || "LG Optimus L70"];
 const server = require('http').createServer(app)
 const port = process.env.PORT || cfg['port'];
 const io = require('socket.io')(server)
@@ -102,6 +103,8 @@ if (rxa.length) {
 }
 const HEADLESS = false || cfg['headless'];
 const USEWEBKIT = false || cfg['webkit'];
+const USEFIREFOX = false || cfg['firefox'];
+const USE = false || cfg['firefox'];
 const ZOOMCONNECTURL=cfg['zoom_wc_link'];
 const ZOOMSCRAPE = cfg['zoom_scrape'];
 const SKIPMEDIA = true || cfg['skipmedia'];
@@ -221,7 +224,7 @@ class Browser {
 				return; // already running;
 			self.disconnect_mic_task_run = true;
 			const sel = '[aria-label="More audio controls"]';
-			while(this.audioconnected) {
+			while(this.audioconnected || this.audioconnected === null) {
 				try {
 					await page.locator('#wc-content').hover();
 					await page.waitForSelector(sel);
@@ -302,6 +305,7 @@ class Browser {
 					await this.waitForMeetingEntryStatus(true);
 					await page.waitForSelector(xpath,{state: 'detached'});
 					await this.waitForMeetingEntryStatus(false);
+					break;
 				}
 				catch(e) {
 					if (page.isClosed())
@@ -317,31 +321,32 @@ class Browser {
 			console.log("waitForHost end");
 
 	}
-	ensure_host_there_and_enter_name() {
-//		await this.page.waitForFunction(() => ! document.title.includes('The meeting has not started'))
+	async ensure_host_there_and_enter_name() {
 		let self = this;
-		this.page.on('domcontentloaded',async page => {
-			if (self.login_page_task_run)
-					return; // already running;
-			self.login_page_task_run = true;
-			const sel = '//title[contains(.,"Zoom meeting on web")]';
-
+		if (self.login_page_task_run)
+				return; // already running;
+		const page = this.page;
+		self.login_page_task_run = true;
+		const sel = '//title[contains(.,"Zoom meeting on web")]';
+		while(true) {
 			try {
 				await page.waitForSelector(sel,{state:'attached'});
 				await this.enteringNameStatus(true);
 
-				let x = self.page.locator('[placeholder="Your Name"]');
+				let x = self.page.locator('#inputname');
 				await x.click();
-				await x.fill('Part3ListBot');
+				await x.fill('Part4ListBot');
 				await page.locator('#joinBtn').click();
 				await page.waitForSelector(sel,{state:'hidden'});
 				await this.enteringNameStatus(false);
+				break;
 			}
 			catch(e) {
+				continue;
 			}
-			
-			self.login_page_task_run = false;
-		});
+		}
+		self.login_page_task_run = false;
+		this.ensure_meeting_entry();
 	}
 	async enteringNameStatus(begin) {
 		if (begin)
@@ -350,35 +355,50 @@ class Browser {
 			console.log("enter name end");
 
 	}
+	async ensure_main_window_setup() {
+		const page = this.page;
 
-	ensure_stop_incomming_video() {
-//		await this.page.waitForFunction(() => ! document.title.includes('The meeting has not started'))
-		let self = this;
-		this.page.on('domcontentloaded',async page => {
-			if (self.stop_video_task_run)
-					return; // already running;
-			self.stop_video_task_run = true;
-			const sel = '[aria-label="More meeting control"]';
-			while(this.videoon) {
-				try {
-					await page.locator('#wc-content').hover();
-					await page.waitForSelector(sel);
-					await page.locator(sel).click();
-					if (await page.$('text=Stop Incoming Video')) {
-						await page.locator('text=Stop Incoming Video').click();
+		while (true) {
+			try {
+				if (!page)
+					break;
+				await page.waitForSelector('.meeting-app',{state:'visible'});
+				await page.locator('.meeting-app').first().hover();
+				await page.waitForSelector('#participants-ul',{state: 'detached'});
+				const sel = '[aria-label="More meeting control"]';
+				if (this.videoon || this.videoon === null) {
+					await page.waitForSelector(sel,{timeout:5000});
+					await page.locator(sel,{timeout:5000}).click();
+					console.log("Looking for"); 
+					if (await page.$('text=Stop Incoming Video'),{timeout:5000}) {
+						await page.locator('text=Stop Incoming Video').click({timeout:10000});
 					}
 					else
 						await page.keyboard.press('Escape');
-					break;
 				}
-				catch(e) {
-					if (page.isClosed())
-						break;
-				}
+				console.log("sel");
+
+				await page.waitForSelector(sel,{timeout:5000});
+				await page.locator(sel,{timeout:5000}).click();
+				console.log("Part?");
+				if (page.$('text=Participants',{timeout:2000}))
+					await page.locator('text=Participants').click();
+				else
+					await page.locator('//button[contains(., "Participants")]',{timeout:2000}).first().click();
+
+				await page.waitForSelector('#participants-ul',{state: 'attached',timeout:2000});
 			}
-			self.stop_video_task_run = false;
-		});
-	}	// as a side effect, this function registers the mutation observer function.
+
+			catch (e) {
+				if (e.name == 'TimeoutError')
+					continue;
+
+				console.log(e);
+				if (page.isClosed())
+					break;
+			}
+		}
+	}
 
 	ensure_part_list_up() {
 		let self = this;
@@ -459,14 +479,24 @@ class Browser {
 	partMe(pa) {
 		console.log("participant me");
 		this.videoon = !pa["videooff"];
-		this.audioconnected = pa["audioconnected"];
-		if (!this.videoon && !this.audioconnected && this.hovertimer) {
+		this.audioconnected = !!pa["audioconnected"];
+		if (this.videoon !== null && !this.videoon && 
+		this.audioconnected !== null && !this.audioconnected && this.hovertimer) {
 			clearInterval(this.hovertimer);
 		}
 		else if (!this.hovertimer) {
 			const self = this;
 			this.hovertimer = setInterval(async ()=>{
 				await self.page.locator('.meeting-app').first().hover();
+				console.log(self.audioconnected);
+				if (self.audioconnected || self.audioconnected === null) {
+					const page = self.page;
+					await page.locator('#wc-content').hover();
+					const sel = '[aria-label="More audio controls"]';
+					await page.waitForSelector(sel);
+					await page.locator(sel).first().click();
+					await page.locator('text=Leave Computer Audio').first().click();
+				}
 			},10000);
 		}
 	}
@@ -492,13 +522,18 @@ class Browser {
 	}
 	async setup_browser() {
 		// Chromium is more easily debugable but webkit is more performant.
-		if (!USEWEBKIT) {
-			this.browser = await chromium.launch({
+		if (USEWEBKIT) {
+			this.browser = await webkit.launch({
 				headless: HEADLESS,
 			});
 		}
-		else {
-			this.browser = await webkit.launch({
+		if (USEFIREFOX) {
+			this.browser = await firefox.launch({
+				headless: HEADLESS,
+			});
+		}
+		if (!USEFIREFOX && !USEWEBKIT) {
+			this.browser = await chromium.launch({
 				headless: HEADLESS,
 			});
 		}
@@ -506,6 +541,8 @@ class Browser {
 	async setup_page() {
 		let context = await this.browser.newContext({
 			permissions: [],
+			viewport: emudevice.viewport,
+			userAgent: emudevice.userAgent,
 		});
 		context.setDefaultTimeout(3*3600*1000);
 		this.page = await context.newPage();
@@ -571,8 +608,6 @@ class Browser {
 				if (add) {
 					ret.name = name;
 					chg = chgchk(true,ret,'me',         label.includes("me") || label.includes("Me"));
-					delete ret['putsent'];
-					
 				}
 				ret.seqno = seqno;
 				chg = chgchk(chg,ret,'dup',            dup);
@@ -682,16 +717,7 @@ class Browser {
 		await this.page.exposeBinding('waitForSelectorDetach', async ({ page } ,selector) => {
 			await thispage[page].waitForSelectorDetach(selector)
 		});
-		this.ensure_meeting_entry();
-		this.ensure_host_there_and_enter_name();
-		if (!USEWEBKIT)
-			this.ensure_stop_incomming_video();
-		this.ensure_part_list_up();
-		if (!USEWEBKIT)
-			this.ensure_mic_disconnected();
-		if (!USEWEBKIT)
-			this.ensure_computer_audio_tab_closed();
-		this.ensure_check_meeting_not_started();
+//		this.ensure_check_meeting_not_started();
 		this.ensure_dialogs_dismissed();
 		this.ensure_leave_url_goes_to_mainurl();
 		await this.page.goto(this.url.href);
@@ -711,10 +737,11 @@ class Browser {
 		this.meeting_entry_task_run = false;
 		this.dialogs_dismissed_task_run = false;
 		this.leave_url_task_run = false;
-		this.videoon = true;
-		this.audioconnected = true;
+		this.videoon = null;
+		this.audioconnected = null;
 		this.hovertimer = null;
 		this.part_list = new PartList();
+		
 	}
 	install_wc_browser() {
 		let self = this;
@@ -738,6 +765,14 @@ class Browser {
 				}
 				await self.setup_browser();
 				await self.setup_page();
+				await self.ensure_host_there_and_enter_name();
+				if (!USEWEBKIT) {
+					self.ensure_mic_disconnected();
+					self.ensure_computer_audio_tab_closed();
+					await self.ensure_main_window_setup();
+				}
+				else
+					self.ensure_part_list_up();
 
 			});
 			
