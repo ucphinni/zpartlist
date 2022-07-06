@@ -132,11 +132,9 @@ class PartList {
 		if (idx == -1)
 			1/0;
 
-		this.working_namelist.splice(idx,1);
+		io.emit('removeNameId',this.working_namelist.splice(idx,1).id);
 		if (!this.working_namelist.length)
-			io.emit('clearAll');
-		else
-			io.emit('removeNameId',id);
+			io.emit('clearAll'); // just in case of a bug.
 
 	}
 	remove_name(name) {
@@ -455,7 +453,7 @@ class Browser {
 		});
 //		context.setDefaultTimeout(3*3600*1000);
 		this.page = await context.newPage();
-//		this.page.setDefaultTimeout(3*3600 *1000);
+		this.page.setDefaultTimeout(3*3600 *1000);
 		
 		await this.page.addInitScript(() => {
 			delete window.navigator.serviceWorker;
@@ -559,34 +557,26 @@ class Browser {
 					partEnd();
 					
 			});
-			partListUlNode = window.document.getElementById('participants-ul');
-			console.log("here");
+			partListUlNode = null;
 			let initpartnode = false;
 			new MutationObserver((mutationRecord)=> {
-				for (let mutation of mutationRecord){
-					for (let node of mutation.removedNodes)
-						if (partListUlNode && node.id === 'participants-ul') {
-							partListObserver.disconnect();
-							partListUlNode = document.getElementById('participants-ul');
-						}
-	
-					if (!mutation.addedNodes.length && initpartnode)
-						continue;
-					var node = document.getElementById('participants-ul');
-					if (!initpartnode) {
-						partListUlNode = null;
+				var need2chk = false;
+				for (var mutation of mutationRecord)	
+					if (mutation.addedNodes.length){
+						need2chk = true;
 					}
-					if (!partListUlNode && node || !initpartnode) {
-						initpartnode = true;
-						partClear();
-						partListUlNode = node;
-						partListObserver.disconnect();
-						partListObserver.observe(node,{
-							attributeFilter:['aria-label'],
-							attributes:true,childList:true, subtree:true
-						});
-					}
-				}
+				if (!need2chk)
+					return;
+				var node = document.getElementById('participants-ul');
+				if (node === partListUlNode || !node)
+					return;
+				partClear();
+				partListUlNode = node;
+				partListObserver.disconnect();
+				partListObserver.observe(node,{
+					attributeFilter:['aria-label'],
+					attributes:true,childList:true, subtree:true
+				});
 			}).observe(document.getRootNode(),{childList:true, subtree:true});
 
 		});
